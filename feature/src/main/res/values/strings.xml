@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">NewsHomework</string>
+    <string name="fatal">Fatality</string>
+    <string name="unknown">Unknown</string>
+    <string name="title">Title</string>
+    <string name="author">author</string>
+    <string name="list_news_empty">Список новостей пуст</string>
+    <string name="search">Поиск по новостям</string>
+</resources>
