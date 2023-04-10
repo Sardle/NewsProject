@@ -3,10 +3,11 @@ package com.example.newsproject.ui
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.example.domain.NewsData
 import com.example.domain.Repository
-import kotlinx.coroutines.launch
+import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.schedulers.Schedulers
 import javax.inject.Inject
 
 class NewsViewModel @Inject constructor(
@@ -19,6 +20,8 @@ class NewsViewModel @Inject constructor(
     private val _loadingLiveData = MutableLiveData<Boolean>()
     val loadingLiveData: LiveData<Boolean> get() = _loadingLiveData
 
+    private val composite = CompositeDisposable()
+
     init {
         getNews()
         getAll()
@@ -26,23 +29,34 @@ class NewsViewModel @Inject constructor(
     }
 
     private fun getNews() {
-        viewModelScope.launch() {
-            repository.getNews()
-        }
+        val disposable = repository.getNews()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe()
+
+        composite.add(disposable)
     }
 
     private fun getAll() {
         _loadingLiveData.value = true
-        viewModelScope.launch {
-            repository.getNewsFromDataBase().collect {
-                _newsLiveData.value = it
+        val disposable = repository.getNewsFromDataBase()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe { value ->
                 _loadingLiveData.value = false
+                _newsLiveData.value = value
             }
-        }
+        composite.add(disposable)
     }
 
     private fun setUserToken() {
         repository.setUserToken(USER_TOKEN)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+
+        composite.clear()
     }
 
     companion object {
