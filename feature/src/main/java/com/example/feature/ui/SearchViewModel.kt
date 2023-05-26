@@ -1,34 +1,51 @@
 package com.example.feature.ui
 
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.example.domain.NewsData
 import com.example.domain.Repository
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class SearchViewModel @Inject constructor(
     private val repository: Repository
 ) : ViewModel() {
-    private val trigger = MutableStateFlow("")
 
-    fun setQuery(query: String) {
-        trigger.value = query
+    private val _newsLiveData = MutableLiveData<List<NewsData>>()
+    val newsLiveData: LiveData<List<NewsData>> get() = _newsLiveData
+
+    private val composite = CompositeDisposable()
+
+    private val publishSubject by lazy {
+        PublishSubject.create<String>()
     }
 
-    val results: Flow<List<NewsData>> = trigger.mapLatest { query ->
-        if (query.isNotEmpty()) {
-            delay(500)
-            repository.search(query)
-        } else repository.search(NOTHING)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000L),
-        initialValue = emptyList()
-    )
+    init {
+        observeSearch()
+    }
 
-    companion object {
-        private const val NOTHING = "INVALID:NOTHING"
+    fun search(query: String) {
+        publishSubject.onNext(query)
+    }
+
+    private fun observeSearch() {
+        val disposable = publishSubject.debounce(500, TimeUnit.MILLISECONDS)
+            .switchMapSingle {
+                repository.search(it)
+            }
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe { _newsLiveData.value = it }
+        composite.add(disposable)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        composite.clear()
     }
 }
